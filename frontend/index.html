@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PDV Restaurante</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- 1. PEDIDOS (vista principal) -->
+<section class="view on" id="v-orders">
+  <div class="bar">
+    <button class="btn" id="newOrder">+ Nuevo pedido</button>
+    <div class="chips" id="chips"></div>
+  </div>
+  <div class="list" id="orderList"></div>
+</section>
+
+<!-- 2. MENÚ / CATEGORÍAS -->
+<section class="view" id="v-menu">
+  <div class="top">
+    <input id="q" type="search" placeholder="Buscar producto" aria-label="Buscar producto">
+    <button class="btn" id="free">Producto libre</button>
+  </div>
+  <div class="split">
+    <div class="cats" id="cats"></div>
+    <div class="prods"><h3 id="ctitle"></h3><div class="grid" id="grid"></div></div>
+  </div>
+  <div class="cart">
+    <div class="sum" id="cartSum"></div>
+    <button class="btn" id="toOrder">Agregar al pedido</button>
+  </div>
+</section>
+
+<!-- 3. DETALLE DEL PEDIDO -->
+<section class="view" id="v-detail">
+  <div class="dh" id="dh"></div>
+  <div class="items" id="items"></div>
+  <div class="tot">
+    <div class="row"><span id="subLbl"></span><span id="sub"></span></div>
+    <div class="row">
+      <div style="display:flex;gap:6px"><button class="chip">% Descuento</button><button class="chip">+ Servicio</button><button class="chip">+ Embalaje</button></div>
+    </div>
+    <div class="row"><span class="tag w" id="paidTag">No pagado</span><span class="big" id="total"></span></div>
+    <div class="acts">
+      <button class="btn bad" id="cancel">Cancelar</button>
+      <button class="btn ghost" id="pay">Pago</button>
+      <button class="btn ok" id="accept">Aceptar</button>
+    </div>
+  </div>
+</section>
+
+<nav>
+  <button data-go="orders" class="on"><b>☰</b>Pedidos PDV</button>
+  <button data-go="sales"><b>$</b>Ventas</button>
+  <button data-go="menu"><b>🍴</b>Menú</button>
+  <button data-go="more"><b>⋯</b>Más</button>
+</nav>
+
+<!-- 4. PRODUCTO (personalización) -->
+<div class="modal" id="modal">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="mTitle">
+    <header><span id="mTitle"></span><button id="mClose" aria-label="Cerrar">✕</button></header>
+    <div class="body" id="mBody"></div>
+    <div class="foot">
+      <div class="qty"><button id="mMinus" aria-label="Menos">−</button><span id="mQty">1</span><button id="mPlus" aria-label="Más">+</button></div>
+      <button class="btn" id="mAdd"></button>
+    </div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
