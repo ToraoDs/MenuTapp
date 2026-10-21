@@ -4,79 +4,97 @@ from sqlalchemy.orm import Session
 from .models import Category, Option, OptionGroup, Product, ProductOptionGroup
 
 GROUPS = {
-    "bebidas": (
-        "Bebida",
+    "carne_frijolada": ("Carne", 1, [("Carne de res 200 gr", 0), ("Pancita asada", 0)]),
+    "proteina_ensalada": ("Proteína", 1, [("Pancita a la parrilla", 0), ("Pechuga", 0)]),
+    "sabor_helado": (
+        "Sabor",
         1,
         [
-            ("Coca Cola 400ml", 4000),
-            ("Coca Cola sin azúcar 400ml", 4000),
-            ("Ginger 400ml", 4000),
-            ("Agua Brisa 600ml", 4000),
-            ("Hit de mango 400ml", 4000),
-            ("Hit de mora 400ml", 4000),
-            ("Coronita 210ml", 5000),
-            ("Tres Cordilleras", 8000),
-            ("Coca Cola 1.5 Lt", 8000),
-            ("Sprite 1.5 Lt", 8000),
+            ("Oreo", 0),
+            ("Milky Way", 0),
+            ("M&M's", 0),
+            ("Frutos del bosque", 0),
+            ("Vainilla", 0),
+            ("Chocolate", 0),
+            ("Arequipe", 0),
         ],
-    ),
-    "teriyaki": (
-        "Teriyaki",
-        3,
-        [("Salsa teriyaki extra", 1000), ("Mayonesa de sushi", 1000), ("Jengibre", 0), ("Wasabi", 0)],
-    ),
-    "salsas": (
-        "Salsas",
-        2,
-        [("BBQ", 1000), ("Ajo", 1000), ("Piña", 1000), ("Picante", 0)],
     ),
 }
 
+
 CATEGORIES = [
-    ("Hamburguesas", "", 20, [
-        ("Hamburguesa clásica", 16900, "Carne, queso, lechuga y tomate.", ["salsas", "bebidas"]),
-        ("Hamburguesa doble", 22900, "Doble carne y queso cheddar.", ["salsas", "bebidas"]),
+    ("Entradas", "", 30, [
+        ("Chorizo", 17500, "3 chorizos santarrosano acompañados de papa salada.", []),
+        ("Chicharrones", 33500, "3 chicharrones acompañados de patacón con queso de untar y pico de gallo.", []),
+        ("Patacones", 11500, "5 unidades con hogao y guacamole.", []),
+        ("Rellena", 26500, "Acompañada de 8 papas criollas.", []),
+        ("Longaniza", 31500, "3 longanizas acompañadas de 8 papas criollas.", []),
     ]),
-    ("Pizza 27cm (6 porciones)", "", 30, [
-        ("Pizza pepperoni", 24900, "Queso mozzarella y pepperoni.", ["bebidas"]),
-        ("Pizza hawaiana", 24900, "Jamón y piña.", ["bebidas"]),
+    ("Sopas", "", 45, [
+        ("Ajiaco normal (22 onz)", 33500, "Pierna-pernil, arroz, arepa y aguacate.", []),
+        ("Ajiaco pequeño (15 onz)", 21000, "Acompañado de arroz.", []),
+        ("Mondongo normal (22 onz)", 33500, "Arroz, arepa y aguacate.", []),
+        ("Mondongo pequeño (15 onz)", 21000, "Acompañado de arroz.", []),
+        ("Mazamorra normal (22 onz)", 33500, "Espinazo, arroz, arepa y aguacate.", []),
+        ("Mazamorra pequeña (15 onz)", 21000, "Acompañada de arroz.", []),
     ]),
-    ("Alitas", "", 10, [
-        ("Alitas x8", 21900, "Ocho alitas con salsa a elección.", ["salsas", "bebidas"]),
+    ("Cortes finos", "", 10, [
+        ("Pechuga", 45000, "Corte mariposa, papa francesa y plátano.", []),
+        ("Churrasco", 48000, "Corte mariposa, papa francesa y plátano.", []),
+        ("Punta de anca", 48000, "Corte mariposa, papa francesa y plátano.", []),
     ]),
-    ("Costillas BBQ", "", 0, [
-        ("Costillas BBQ", 32900, "Media tira con salsa BBQ.", ["bebidas"]),
+    ("Frijolada", "", 20, [
+        ("Frijolada", 45000, "Frijol bola roja, chicharrón, chorizo, arroz y aguacate (15 onz).", ["carne_frijolada"]),
     ]),
-    ("Salchipapa", "", 40, [
-        ("Salchipapa clásica", 14900, "Papa, salchicha y salsas.", ["salsas", "bebidas"]),
+    ("Especialidades", "", 0, [
+        ("Mixta 3 carnes", 45000, "Res, pancita asada y costillas, acompañado con papa salada, plátano y arepa boyacense.", []),
+        ("Mixta 2 carnes", 45000, "Acompañada con papa salada, plátano y arepa boyacense.", []),
+        ("Solo costilla", 48000, "", []),
+        ("Medio plato mixta 3 carnes", 30000, "Res, pancita asada y costillas, acompañado con papa salada y plátano.", []),
+        ("Insaciable", 75000, "Pancita asada, costillas, res, chorizo santarrosano, chicharrón, rellena, arepas x2, papa salada x2, papa criolla x4.", []),
+        ("Parrillada", 105000, "Carne de res, pancita asada, costillas, rellena, longaniza, papa criolla, plátano maduro y 3 arepas.", []),
     ]),
-    ("Perro caliente", "", 35, [
-        ("Perro americano", 12900, "Salchicha, queso y papa ripio.", ["salsas", "bebidas"]),
+    ("Ensaladas", "", 110, [
+        ("Ensalada pequeña", 15500, "Aguacate, tomate cherry, mazorca desgranada, lechuga hidropónica y cebollín.", []),
+        ("Mega ensalada gourmet", 39000, "Aguacate, tomate cherry, mazorca desgranada, lechuga hidropónica, cebollín, atún y patacón.", ["proteina_ensalada"]),
     ]),
-    ("Lasaña", "", 25, [
-        ("Lasagna de carne", 18900, "Lasaña gratinada con carne y pan.", ["bebidas"]),
+    ("Adiciones", "", 90, [
+        ("Papas a la francesa", 9500, "Porción 120 gr.", []),
+        ("Arroz", 5200, "1 porción.", []),
+        ("Aguacate", 5100, "1/2.", []),
+        ("Plátano", 10500, "1 unidad.", []),
+        ("Papa criolla", 11900, "10 unidades.", []),
+        ("Arepa", 4000, "1 unidad.", []),
+        ("Guacamole", 6800, "3.5 onz.", []),
+        ("Papa salada", 10500, "5 unidades.", []),
     ]),
-    ("Sushi makis especiales", "", 200, [
-        ("Crispy Philadelphia", 27900,
-         "Diez makis rellenos de salmón, queso crema, aguacate y mayonesa picante, envueltos en tempura y panko, servidos con salsa teriyaki y mayonesa de sushi.",
-         ["bebidas", "teriyaki"]),
-    ]),
-    ("Sushi nori makis", "", 210, [
-        ("California roll", 22900, "Diez makis de kanikama y aguacate.", ["bebidas", "teriyaki"]),
-    ]),
-    ("Sushi combos", "", 190, [
-        ("Combo x30", 69900, "Treinta piezas surtidas.", ["bebidas", "teriyaki"]),
+    ("Bebidas", "", 200, [
+        ("Vaso de limonada", 5500, "12 onz.", []),
+        ("Jarra de limonada", 21000, "6 vasos de 12 onz.", []),
+        ("Té limón/durazno", 5600, "", []),
+        ("Pony Malta mini", 3300, "", []),
+        ("Pony Malta 330 ml", 5400, "", []),
+        ("Agua botella", 5000, "", []),
+        ("Agua H2O", 5600, "", []),
+        ("Jugo Hit 200 ml", 3300, "", []),
+        ("Jugo Hit 500 ml", 5600, "", []),
+        ("Coca-Cola 400 ml", 5600, "", []),
+        ("Gaseosa Postobón 400 ml", 5600, "", []),
     ]),
     ("Cervezas", "", 45, [
-        ("Cerveza Club Colombia", 6000, "Botella 330ml.", []),
-        ("Cerveza Corona", 9000, "Botella 355ml.", []),
+        ("Club Colombia", 7000, "", []),
+        ("Heineken", 8500, "", []),
+        ("Coronita", 7000, "", []),
+        ("Águila", 6000, "", []),
+        ("Águila light", 6800, "", []),
+        ("Poker", 6000, "", []),
+        ("Cola y pola", 5500, "", []),
+        ("Refajo Andina", 5500, "", []),
     ]),
-    ("Jugos Hit", "", 130, [
-        ("Jugo Hit de mango", 4000, "Caja 400ml.", []),
-        ("Jugo Hit de mora", 4000, "Caja 400ml.", []),
+    ("Helados", "", 330, [
+        ("Helado Popsy", 7500, "Helado gourmet.", ["sabor_helado"]),
     ]),
 ]
-
 
 def seed_if_empty(db: Session) -> None:
     if db.scalar(select(Category.id).limit(1)) is not None:
