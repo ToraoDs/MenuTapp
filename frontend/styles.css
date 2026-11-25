@@ -98,3 +98,6 @@ nav b{font-size:18px;font-weight:400}
 .tot{background:var(--card);border-top:1px solid var(--line);padding:12px 14px;display:grid;gap:10px}
 .tot .big{font-size:24px;font-weight:700}
 .acts{display:grid;grid-template-columns:1fr 1.6fr 2fr;gap:8px}
+
+/* Imágenes reales de productos */
+.ph.has-img{background-size:cover;background-position:center;text-shadow:0 1px 4px rgba(0,0,0,.95)}

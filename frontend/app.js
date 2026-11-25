@@ -13,6 +13,46 @@ const AREAS_LABEL = {
   BEBIDAS: 'Bebidas'
 };
 
+/* ---------- Mapa de imágenes reales (frontend/imagenes/) ---------- */
+const PRODUCT_IMAGES = {
+  'ajiaco normal (22 onz)': 'ajiaco.jpeg',
+  'ajiaco pequeño (15 onz)': 'ajiacoPequeño.jpeg',
+  'chicharrones': 'chicharrones.jpeg',
+  'chorizo': 'chorizo.jpeg',
+  'churrasco': 'churrasco.jpeg',
+  'frijolada': 'frijolada.jpeg',
+  'insaciable': 'insaciable.jpeg',
+  'longaniza': 'longaniza.jpeg',
+  'mazamorra normal (22 onz)': 'mazamorra.jpeg',
+  'mazamorra pequeña (15 onz)': 'mazamorraPequeña.jpeg',
+  'medio plato mixta 3 carnes': 'Medio plato mixta 3 carnes.jpeg',
+  //'mixta 2 carnes': 'Mixta 1-2.jpeg',
+  //'mixta 3 carnes': 'Mixta 1-2.jpeg',
+  'mondongo normal (22 onz)': 'mondongo.jpeg',
+  'mondongo pequeño (15 onz)': 'mondongoPequeño.jpeg',
+  'parrillada': 'parrillada.jpeg',
+  'patacones': 'patacones.jpeg',
+  'pechuga': 'pechuga de pollo.jpeg',
+  'pechuga de pollo': 'pechuga de pollo.jpeg',
+  'punta de anca': 'punta de anca.jpeg',
+  'rellena': 'rellena.jpeg',
+  'solo costilla': 'solo costilla.jpeg'
+};
+
+function obtenerImagenProducto(nombre) {
+  const clave = (nombre || '').trim().toLowerCase();
+  const archivo = PRODUCT_IMAGES[clave];
+  return archivo ? encodeURI(`/imagenes/${archivo}`) : null;
+}
+
+function renderPhProducto(p, m, contenidoHtml = '') {
+  const imgUrl = obtenerImagenProducto(p.nombre);
+  if (imgUrl) {
+    return `<div class="ph has-img" style="background-image:linear-gradient(to top,rgba(0,0,0,.78) 0%,rgba(0,0,0,.15) 55%,rgba(0,0,0,.1) 100%),url('${imgUrl}')">${contenidoHtml}</div>`;
+  }
+  return `<div class="ph" style="background:linear-gradient(135deg,hsl(${m.hue} 55% 38%),hsl(${m.hue + 30} 60% 22%))">${contenidoHtml}</div>`;
+}
+
 /* ---------- Cliente API con token JWT ---------- */
 async function asegurarToken() {
   let token = localStorage.getItem('pdv_token');
@@ -137,7 +177,7 @@ function renderMenu() {
 
   $('#ctitle').textContent = title;
   $('#grid').innerHTML = items.length ? items.map(x => `<button class="prod" data-id="${x.p.id}">
-    <div class="ph" style="background:linear-gradient(135deg,hsl(${x.m.hue} 55% 38%),hsl(${x.m.hue + 30} 60% 22%))"><span>${x.m.emoji || ''}</span>${x.p.nombre}</div>
+    ${renderPhProducto(x.p, x.m, `<span>${obtenerImagenProducto(x.p.nombre) ? '' : (x.m.emoji || '')}</span>${x.p.nombre}`)}
     <p>${money(x.p.precio)}</p></button>`).join('')
     : '<p style="color:var(--mut)">Sin resultados. Prueba con otra palabra.</p>';
 
@@ -173,9 +213,10 @@ function openProduct(p) {
   curQty = 1;
   $('#mTitle').textContent = p.nombre.toUpperCase();
   const m = MENU.find(m => m.productos.some(prod => prod.id === p.id)) || { hue: 20, emoji: '' };
+  const tieneImg = Boolean(obtenerImagenProducto(p.nombre));
 
   $('#mBody').innerHTML = `<div class="pinfo"><div><p>${p.descripcion || ''}</p><b style="font-size:20px">${money(p.precio)}</b></div>
-    <div class="ph" style="background:linear-gradient(135deg,hsl(${m.hue} 55% 38%),hsl(${m.hue + 30} 60% 22%))"><span style="position:static;font-size:44px;margin:auto">${m.emoji || ''}</span></div></div>` +
+    ${renderPhProducto(p, m, tieneImg ? '' : `<span style="position:static;font-size:44px;margin:auto">${m.emoji || ''}</span>`)}</div>` +
     (p.grupos || []).map((g, gi) => `<div class="grp"><h4>${g.titulo}</h4><small>Selecciona hasta ${g.max_opciones} opción(es)</small>
       <div class="opts">${g.opciones.map((o, oi) => `<button class="opt" data-g="${gi}" data-o="${oi}"><span class="bx"></span><span>${o.nombre}<em>${o.precio ? '+ ' + money(o.precio) : 'Gratis'}</em></span></button>`).join('')}</div>
     </div>`).join('');
