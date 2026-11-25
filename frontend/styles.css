@@ -53,6 +53,16 @@ nav b{font-size:18px;font-weight:400}
 .cart{border-top:1px solid var(--line);background:var(--card);padding:10px 12px;display:grid;gap:8px}
 .cart .sum{text-align:center;color:var(--mut);font-size:14px}
 
+/* Administración de menú */
+.admin-card{background:var(--card);border-radius:8px;padding:12px;border:1px solid var(--line);display:grid;gap:8px}
+.admin-card.inactive{opacity:.6;border-style:dashed}
+.admin-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}
+.btn.sm{padding:6px 10px;font-size:13px}
+.field{display:grid;gap:4px;font-size:14px}
+.field label{font-weight:600;color:var(--mut);font-size:13px}
+.field input,.field select,.field textarea{padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--tx);font:inherit}
+.swatch{width:14px;height:14px;border-radius:4px;display:inline-block;vertical-align:middle}
+
 
 /* modal */
 .modal{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;z-index:9;padding-top:env(safe-area-inset-top,0px)}

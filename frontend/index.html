@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>PDV Restaurante</title>
-<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="styles.css?v=5">
 </head>
 <body>
 
@@ -17,11 +17,12 @@
   <div class="list" id="orderList"></div>
 </section>
 
-<!-- 2. MENÚ / CATEGORÍAS -->
+<!-- 2. MENÚ / CATEGORÍAS (Toma de pedidos) -->
 <section class="view" id="v-menu">
   <div class="top">
     <input id="q" type="search" placeholder="Buscar producto" aria-label="Buscar producto">
-    <button class="btn" id="free">Producto libre</button>
+    <button class="btn ghost" id="free">Producto libre</button>
+    <button class="btn" id="openAdminMenu">⚙ Gestionar</button>
   </div>
   <div class="split">
     <div class="cats" id="cats"></div>
@@ -51,6 +52,33 @@
   </div>
 </section>
 
+<!-- 4. GESTIÓN DE MENÚ (Administración) -->
+<section class="view" id="v-admin-menu">
+  <div class="bar">
+    <button class="btn ghost" id="backToMenu">← Volver al Menú</button>
+    <h3 style="margin:0;flex:1">Gestión de Menú</h3>
+    <button class="btn" id="btnAdminNew">+ Nueva Categoría</button>
+  </div>
+  <div class="bar" style="padding-top:0">
+    <div class="chips">
+      <button class="chip on" data-admin-tab="cats">Categorías</button>
+      <button class="chip" data-admin-tab="prods">Productos</button>
+      <button class="chip" data-admin-tab="groups">Grupos de opciones</button>
+    </div>
+    <label style="font-size:13px;color:var(--mut);display:flex;align-items:center;gap:6px;cursor:pointer">
+      <input type="checkbox" id="chkInactivos" checked> Mostrar inactivos
+    </label>
+  </div>
+  <!-- Barra de filtros exclusiva para la pestaña Productos -->
+  <div class="bar" id="adminProdFilters" style="display:none;padding-top:0">
+    <select id="adminCatFilter" style="padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--tx);font:inherit">
+      <option value="all">Todas las categorías</option>
+    </select>
+    <input id="adminProdSearch" type="search" placeholder="Filtrar producto por nombre..." style="flex:1;min-width:180px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--tx);font:inherit">
+  </div>
+  <div class="list" id="adminContent"></div>
+</section>
+
 <nav>
   <button data-go="orders" class="on"><b>☰</b>Pedidos PDV</button>
   <button data-go="sales"><b>$</b>Ventas</button>
@@ -58,7 +86,7 @@
   <button data-go="more"><b>⋯</b>Más</button>
 </nav>
 
-<!-- 4. PRODUCTO (personalización) -->
+<!-- MODAL: PRODUCTO (personalización para pedido) -->
 <div class="modal" id="modal">
   <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="mTitle">
     <header><span id="mTitle"></span><button id="mClose" aria-label="Cerrar">✕</button></header>
@@ -70,6 +98,14 @@
   </div>
 </div>
 
-<script src="app.js"></script>
+<!-- MODAL: FORMULARIOS ADMINISTRATIVOS (Categorías / Productos / Grupos) -->
+<div class="modal" id="adminModal">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="amTitle">
+    <header><span id="amTitle"></span><button id="amClose" aria-label="Cerrar">✕</button></header>
+    <form class="body" id="amForm" style="padding-top:12px;padding-bottom:16px;display:grid;gap:12px"></form>
+  </div>
+</div>
+
+<script src="app.js?v=5"></script>
 </body>
 </html>
