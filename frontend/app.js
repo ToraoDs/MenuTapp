@@ -54,19 +54,89 @@ function renderPhProducto(p, m, contenidoHtml = '') {
 }
 
 /* ---------- Cliente API con token JWT ---------- */
-async function asegurarToken() {
-  let token = localStorage.getItem('pdv_token');
-  if (token) return token;
+const ROLES_LABEL = {
+  ADMINISTRADOR: 'Administrador',
+  MESERO: 'Mesero',
+  CAJERA: 'Cajera',
+  ENCARGADO_AREA: 'Encargado de área',
+  PATINADOR: 'Patinador'
+};
 
-  const res = await fetch('/api/auth/login', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ usuario: 'admin', contrasena: 'admin123' })
+const ROL_PERMISOS = {
+  ADMINISTRADOR: {
+    inicio: 'orders',
+    nav: ['orders', 'sales', 'menu', 'users', 'reports', 'more'],
+    vistas: ['orders', 'sales', 'menu', 'detail', 'admin-menu', 'users', 'kds', 'reports', 'more']
+  },
+  MESERO: {
+    inicio: 'orders',
+    nav: ['orders', 'menu'],
+    vistas: ['orders', 'menu', 'detail']
+  },
+  CAJERA: {
+    inicio: 'sales',
+    nav: ['sales', 'reports'],
+    vistas: ['sales', 'reports']
+  },
+  ENCARGADO_AREA: {
+    inicio: 'kds',
+    nav: ['kds'],
+    vistas: ['kds']
+  },
+  PATINADOR: {
+    inicio: 'kds',
+    nav: ['kds'],
+    vistas: ['kds']
+  }
+};
+
+function getUsuarioActual() {
+  try {
+    return JSON.parse(localStorage.getItem('pdv_usuario') || 'null');
+  } catch {
+    return null;
+  }
+}
+
+function aplicarPermisosRol() {
+  const u = getUsuarioActual();
+  const rol = u?.rol;
+  const conf = ROL_PERMISOS[rol] || { inicio: 'orders', nav: [], vistas: [] };
+
+  const btnKds = $('#btnOpenKds');
+  if (btnKds) {
+    btnKds.style.display = ['ADMINISTRADOR', 'ENCARGADO_AREA', 'PATINADOR'].includes(rol) ? '' : 'none';
+  }
+
+  const btnAdmin = $('#openAdminMenu');
+  if (btnAdmin) {
+    btnAdmin.style.display = rol === 'ADMINISTRADOR' ? '' : 'none';
+  }
+
+  $$('nav button[data-go]').forEach(b => {
+    b.style.display = conf.nav.includes(b.dataset.go) ? '' : 'none';
   });
-  if (!res.ok) throw new Error('No se pudo autenticar con el servidor');
-  const data = await res.json();
-  token = data.access_token;
-  localStorage.setItem('pdv_token', token);
+}
+
+function mostrarLogin(mensaje = '') {
+  localStorage.removeItem('pdv_token');
+  localStorage.removeItem('pdv_usuario');
+  $$('.view').forEach(x => x.classList.toggle('on', x.id === 'v-login'));
+  const nav = $('nav');
+  if (nav) nav.style.display = 'none';
+  const err = $('#loginErr');
+  if (err) {
+    err.textContent = mensaje;
+    err.style.display = mensaje ? 'block' : 'none';
+  }
+}
+
+async function asegurarToken() {
+  const token = localStorage.getItem('pdv_token');
+  if (!token) {
+    mostrarLogin();
+    throw new Error('No hay sesión activa');
+  }
   return token;
 }
 
@@ -82,23 +152,8 @@ async function api(url, options = {}) {
   });
 
   if (res.status === 401) {
-    localStorage.removeItem('pdv_token');
-    const nuevoToken = await asegurarToken();
-    const retry = await fetch(url, {
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${nuevoToken}`,
-        ...(options.headers || {})
-      }
-    });
-    if (!retry.ok) {
-      const err = await retry.json().catch(() => ({ detail: retry.statusText }));
-      const e = new Error(err.detail || 'Error en la petición');
-      e.status = retry.status;
-      throw e;
-    }
-    return retry.status === 204 ? null : retry.json();
+    mostrarLogin('Tu sesión expiró. Inicia sesión de nuevo.');
+    throw new Error('Sesión expirada o no autorizada');
   }
 
   if (!res.ok) {
@@ -124,9 +179,16 @@ async function cargarMenu() {
 
 /* ---------- Navegación ---------- */
 function go(v) {
+  const u = getUsuarioActual();
+  if (v !== 'login' && u) {
+    const conf = ROL_PERMISOS[u.rol];
+    if (conf && !conf.vistas.includes(v)) {
+      v = conf.inicio;
+    }
+  }
   $$('.view').forEach(x => x.classList.toggle('on', x.id === 'v-' + v));
   const navKey = v === 'detail' ? 'orders' : (v === 'admin-menu' ? 'menu' : v);
-  $$('nav button').forEach(b => b.classList.toggle('on', b.dataset.go === navKey));
+  $$('nav button[data-go]').forEach(b => b.classList.toggle('on', b.dataset.go === navKey));
 }
 
 const total = o => o.lines.reduce((s, l) => s + l.unit * l.qty, 0);
@@ -155,6 +217,7 @@ $('#newOrder').onclick = () => { draft = { id: seq, t: Date.now(), lines: [], pa
 
 /* ---------- Menú (conectado a /api/menu) ---------- */
 function renderMenu() {
+  aplicarPermisosRol();
   if (!MENU.length) {
     $('#cats').innerHTML = '';
     $('#ctitle').textContent = 'Cargando menú...';
@@ -931,15 +994,773 @@ function renderDetail(o, saved) {
   };
 }
 
+/* ---------- GESTIÓN DE USUARIOS (Administración) ---------- */
+let ADMIN_USERS = [];
+
+async function cargarUsuarios() {
+  try {
+    ADMIN_USERS = await api('/api/usuarios');
+    renderUsuarios();
+  } catch (e) {
+    $('#usersList').innerHTML = `<div class="empty" style="color:var(--bad)">Error: ${e.message}</div>`;
+  }
+}
+
+function renderUsuarios() {
+  if (!ADMIN_USERS.length) {
+    $('#usersList').innerHTML = '<div class="empty">No hay usuarios registrados.</div>';
+    return;
+  }
+
+  $('#usersList').innerHTML = ADMIN_USERS.map(u => `
+    <div class="admin-card ${u.activo ? '' : 'inactive'}">
+      <div class="row">
+        <div>
+          <b>${u.nombre}</b>
+          <small style="color:var(--mut);display:block">@${u.usuario}</small>
+        </div>
+        <span class="tag ${u.activo ? 'g' : 'w'}">${u.activo ? 'Activo' : 'Inactivo'}</span>
+      </div>
+      <div class="row" style="font-size:13px;color:var(--mut)">
+        <span>Rol: <b>${ROLES_LABEL[u.rol] || u.rol}</b></span>
+        <span>${u.area ? `Área: <b>${AREAS_LABEL[u.area] || u.area}</b>` : ''}</span>
+      </div>
+      <div class="admin-actions">
+        <button class="btn ghost sm" data-edit-user="${u.id}">Editar</button>
+        ${u.activo
+          ? `<button class="btn bad sm" data-toggle-user="${u.id}" data-next="false">Desactivar</button>`
+          : `<button class="btn ok sm" data-toggle-user="${u.id}" data-next="true">Reactivar</button>`
+        }
+      </div>
+    </div>
+  `).join('');
+}
+
+function abrirModalUsuario(userObj = null) {
+  const esEdicion = Boolean(userObj);
+  $('#amTitle').textContent = esEdicion ? `Editar usuario: ${userObj.nombre}` : 'Nuevo usuario';
+
+  $('#amForm').innerHTML = `
+    <div class="field">
+      <label for="usrNombre">Nombre completo *</label>
+      <input id="usrNombre" required maxlength="120" value="${esEdicion ? userObj.nombre : ''}" placeholder="Ej. Carlos Pérez">
+    </div>
+    <div class="field">
+      <label for="usrLogin">Usuario (login) *</label>
+      <input id="usrLogin" required minlength="3" maxlength="60" value="${esEdicion ? userObj.usuario : ''}" ${esEdicion ? 'disabled' : ''} placeholder="Ej. mesero3">
+    </div>
+    <div class="field">
+      <label for="usrPass">${esEdicion ? 'Nueva contraseña (dejar vacío para mantener)' : 'Contraseña *'}</label>
+      <input id="usrPass" type="password" ${esEdicion ? '' : 'required'} minlength="4" maxlength="100" placeholder="Mínimo 4 caracteres">
+    </div>
+    <div class="field">
+      <label for="usrRol">Rol *</label>
+      <select id="usrRol" required>
+        <option value="MESERO" ${userObj?.rol === 'MESERO' ? 'selected' : ''}>Mesero</option>
+        <option value="CAJERA" ${userObj?.rol === 'CAJERA' ? 'selected' : ''}>Cajera</option>
+        <option value="ENCARGADO_AREA" ${userObj?.rol === 'ENCARGADO_AREA' ? 'selected' : ''}>Encargado de área</option>
+        <option value="PATINADOR" ${userObj?.rol === 'PATINADOR' ? 'selected' : ''}>Patinador</option>
+        <option value="ADMINISTRADOR" ${userObj?.rol === 'ADMINISTRADOR' ? 'selected' : ''}>Administrador</option>
+      </select>
+    </div>
+    <div class="field" id="usrAreaWrap" style="display:${userObj?.rol === 'ENCARGADO_AREA' ? 'block' : 'none'}">
+      <label for="usrArea">Área asignada *</label>
+      <select id="usrArea">
+        <option value="PARRILLA" ${userObj?.area === 'PARRILLA' ? 'selected' : ''}>Parrilla</option>
+        <option value="SOPAS_ENTRADAS" ${userObj?.area === 'SOPAS_ENTRADAS' ? 'selected' : ''}>Sopas y Entradas</option>
+        <option value="BEBIDAS" ${userObj?.area === 'BEBIDAS' ? 'selected' : ''}>Bebidas</option>
+      </select>
+    </div>
+    <div class="row" style="margin-top:6px">
+      <button type="button" class="btn ghost" id="amCancel" style="flex:1">Cancelar</button>
+      <button type="submit" class="btn ok" style="flex:1">${esEdicion ? 'Guardar cambios' : 'Crear usuario'}</button>
+    </div>
+  `;
+
+  $('#usrRol').onchange = e => {
+    $('#usrAreaWrap').style.display = e.target.value === 'ENCARGADO_AREA' ? 'block' : 'none';
+  };
+  $('#amCancel').onclick = () => $('#adminModal').classList.remove('on');
+
+  $('#amForm').onsubmit = async e => {
+    e.preventDefault();
+    const rol = $('#usrRol').value;
+    const area = rol === 'ENCARGADO_AREA' ? $('#usrArea').value : null;
+    const pass = $('#usrPass').value;
+
+    try {
+      if (esEdicion) {
+        const payload = { nombre: $('#usrNombre').value.trim(), rol, area };
+        if (pass) payload.contrasena = pass;
+        await api(`/api/usuarios/${userObj.id}`, { method: 'PUT', body: JSON.stringify(payload) });
+      } else {
+        const payload = {
+          nombre: $('#usrNombre').value.trim(),
+          usuario: $('#usrLogin').value.trim(),
+          contrasena: pass,
+          rol,
+          area,
+          activo: true
+        };
+        await api('/api/usuarios', { method: 'POST', body: JSON.stringify(payload) });
+      }
+      $('#adminModal').classList.remove('on');
+      await cargarUsuarios();
+    } catch (err) {
+      alert(err.message);
+    }
+  };
+
+  $('#adminModal').classList.add('on');
+}
+
+$('#btnNewUser').onclick = () => abrirModalUsuario(null);
+$('#usersList').onclick = async e => {
+  const editBtn = e.target.closest('[data-edit-user]');
+  if (editBtn) {
+    const u = ADMIN_USERS.find(x => x.id === +editBtn.dataset.editUser);
+    if (u) abrirModalUsuario(u);
+    return;
+  }
+  const toggleBtn = e.target.closest('[data-toggle-user]');
+  if (toggleBtn) {
+    const id = +toggleBtn.dataset.toggleUser;
+    const activo = toggleBtn.dataset.next === 'true';
+    if (!activo && !confirm('¿Desactivar este usuario? No podrá iniciar sesión.')) return;
+    try {
+      await api(`/api/usuarios/${id}`, { method: 'PUT', body: JSON.stringify({ activo }) });
+      await cargarUsuarios();
+    } catch (err) {
+      alert(err.message);
+    }
+  }
+};
+/* ---------- CUENTAS, CAJA, RECIBOS Y REPORTES ---------- */
+let CUENTAS_API = [];
+
+async function cargarCuentas() {
+  const u = getUsuarioActual();
+  if (!u || !['CAJERA', 'ADMINISTRADOR'].includes(u.rol)) return;
+  const estado = $('#cajaEstadoFilter')?.value ?? 'ABIERTA';
+  const qs = estado ? `?estado=${encodeURIComponent(estado)}` : '';
+  try {
+    CUENTAS_API = await api(`/api/cuentas${qs}`);
+    renderCuentas();
+  } catch (e) {
+    $('#cuentasList').innerHTML = `<div class="empty" style="color:var(--bad)">Error: ${e.message}</div>`;
+  }
+}
+
+function renderCuentas() {
+  if (!CUENTAS_API.length) {
+    $('#cuentasList').innerHTML = '<div class="empty">No hay cuentas en este filtro.</div>';
+    return;
+  }
+
+  $('#cuentasList').innerHTML = CUENTAS_API.map(c => {
+    const monto = c.total_cobrado ?? c.total ?? 0;
+    const esAbierta = c.estado === 'ABIERTA';
+    return `
+      <div class="order ${esAbierta ? '' : 'paid'}">
+        <div class="row">
+          <b>Cuenta #${c.id} · Mesa ${c.mesa_numero}</b>
+          <span>${money(monto)}</span>
+        </div>
+        <div class="row">
+          <span>
+            <span class="tag ${esAbierta ? 'w' : 'g'}">${c.estado}</span>
+            ${c.enviada_caja_en ? '<span class="tag">En caja</span>' : ''}
+          </span>
+          <small style="color:var(--mut)">${c.pago?.numero_recibo || ''}</small>
+        </div>
+        <div class="row" style="margin-top:6px;gap:6px;flex-wrap:wrap">
+          ${esAbierta ? `<button class="btn ok sm" data-cobrar-cuenta="${c.id}" data-total="${c.total}">Cobrar</button>` : ''}
+          ${!esAbierta ? `<button class="btn ghost sm" data-recibo-cuenta="${c.id}">Ver recibo</button>` : ''}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+$('#cajaEstadoFilter').onchange = () => cargarCuentas();
+$('#btnRefreshCuentas').onclick = () => cargarCuentas();
+
+$('#cuentasList').onclick = async e => {
+  const btnCobrar = e.target.closest('[data-cobrar-cuenta]');
+  if (btnCobrar) {
+    const cuentaId = +btnCobrar.dataset.cobrarCuenta;
+    const totalCuenta = +btnCobrar.dataset.total;
+    $('#amTitle').textContent = `Cobrar Cuenta #${cuentaId} (Total: ${money(totalCuenta)})`;
+    $('#amForm').innerHTML = `
+      <div class="field">
+        <label for="pagoMetodo">Método de pago</label>
+        <select id="pagoMetodo">
+          <option value="EFECTIVO">Efectivo</option>
+          <option value="TARJETA">Tarjeta</option>
+          <option value="TRANSFERENCIA">Transferencia</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="pagoValor">Valor recibido (COP)</label>
+        <input id="pagoValor" type="number" min="${totalCuenta}" step="100" value="${totalCuenta}" required>
+      </div>
+      <div class="row" style="margin-top:6px">
+        <button type="button" class="btn ghost" id="amCancel" style="flex:1">Cancelar</button>
+        <button type="submit" class="btn ok" style="flex:1">Registrar pago</button>
+      </div>
+    `;
+    $('#amCancel').onclick = () => $('#adminModal').classList.remove('on');
+    $('#amForm').onsubmit = async ev => {
+      ev.preventDefault();
+      try {
+        const rec = await api(`/api/cuentas/${cuentaId}/pagar`, {
+          method: 'POST',
+          body: JSON.stringify({
+            metodo: $('#pagoMetodo').value,
+            valor: parseInt($('#pagoValor').value, 10)
+          })
+        });
+        $('#adminModal').classList.remove('on');
+        alert(`Pago registrado · Recibo ${rec.numero_recibo} · Cambio: ${money(rec.cambio)}`);
+        await Promise.all([cargarCuentas(), cargarMesas()]);
+      } catch (err) {
+        alert(err.message);
+      }
+    };
+    $('#adminModal').classList.add('on');
+    return;
+  }
+
+  const btnRecibo = e.target.closest('[data-recibo-cuenta]');
+  if (btnRecibo) {
+    const cuentaId = +btnRecibo.dataset.reciboCuenta;
+    try {
+      const r = await api(`/api/cuentas/${cuentaId}/recibo`);
+      const detalleLineas = (r.lineas || []).map(l => `${l.cantidad}x ${l.nombre} (${money(l.subtotal)})`).join('\n');
+      alert(
+        `Recibo: ${r.numero_recibo}\nMesa: ${r.mesa_numero}\nMétodo: ${r.metodo}\n` +
+        `Total: ${money(r.total)} · Recibido: ${money(r.valor)} · Cambio: ${money(r.cambio)}\n\n${detalleLineas}`
+      );
+    } catch (err) {
+      alert(err.message);
+    }
+  }
+};
+
+function inicializarFechasReporte() {
+  const hoy = new Date().toISOString().slice(0, 10);
+  if ($('#repDesde') && !$('#repDesde').value) $('#repDesde').value = hoy;
+  if ($('#repHasta') && !$('#repHasta').value) $('#repHasta').value = hoy;
+}
+
+async function cargarReportes() {
+  inicializarFechasReporte();
+  const desde = $('#repDesde')?.value;
+  const hasta = $('#repHasta')?.value;
+  const params = new URLSearchParams();
+  if (desde) params.set('desde', desde);
+  if (hasta) params.set('hasta', hasta);
+  const qs = params.toString() ? `?${params.toString()}` : '';
+
+  try {
+    const [ventas, prodData] = await Promise.all([
+      api(`/api/reportes/ventas${qs}`),
+      api(`/api/reportes/productos${qs}&limite=10`)
+    ]);
+
+    const metodosHtml = (ventas.por_metodo || [])
+      .map(m => `<div>${m.metodo}: <b>${money(m.total)}</b> (${m.cuentas})</div>`)
+      .join('');
+    const topHtml = (prodData.productos || [])
+      .map(p => `<div>${p.cantidad}x ${p.producto} — <b>${money(p.total)}</b></div>`)
+      .join('');
+
+    $('#reportesResumen').innerHTML = `
+      <div class="order paid">
+        <div class="row"><b>Ventas totales</b><span>${money(ventas.total_ventas)}</span></div>
+        <small style="color:var(--mut)">Cuentas pagadas: ${ventas.cuentas_pagadas} · Ticket promedio: ${money(ventas.ticket_promedio)}</small>
+      </div>
+      <div class="order">
+        <b>Por método de pago</b>
+        <div style="font-size:13px;display:grid;gap:4px">${metodosHtml || 'Sin ventas'}</div>
+      </div>
+      <div class="order">
+        <b>Top productos vendidos</b>
+        <div style="font-size:13px;display:grid;gap:4px">${topHtml || 'Sin productos'}</div>
+      </div>
+    `;
+  } catch (e) {
+    $('#reportesResumen').innerHTML = `<div class="empty" style="color:var(--bad)">Error: ${e.message}</div>`;
+  }
+}
+
+$('#btnRunReportes').onclick = () => cargarReportes();
+
 /* ---------- Navegación inferior ---------- */
-$$('nav button').forEach(b => b.onclick = () => {
+$$('nav button[data-go]').forEach(b => b.onclick = () => {
   const t = b.dataset.go;
   if (t === 'orders') { renderOrders(); go('orders'); }
   else if (t === 'menu') { if (!draft) draft = { id: seq, t: Date.now(), lines: [], paid: false }; renderMenu(); go('menu'); }
-  else alert('Esta sección se conectará más adelante.');
+  else if (t === 'users') { cargarUsuarios(); go('users'); }
+  else if (t === 'sales') { cargarCuentas(); go('sales'); }
+  else if (t === 'reports') { cargarReportes(); go('reports'); }
+  else alert('Esta sección se conectará en el siguiente paso.');
 });
 
+/* ---------- MESAS, PEDIDOS REALES, KDS Y SSE ---------- */
+let MESAS = [];
+let PEDIDOS_API = [];
+let COMANDAS_API = [];
+let kdsEstadoFiltro = '';
+let sseSource = null;
+
+async function cargarMesas() {
+  try {
+    MESAS = await api('/api/mesas');
+    const selDraft = $('#draftMesa');
+    if (selDraft) {
+      selDraft.innerHTML = MESAS.map(m =>
+        `<option value="${m.numero}">Mesa ${m.numero}${m.cuenta_abierta ? ` (${money(m.total_actual)})` : ''}</option>`
+      ).join('');
+    }
+    const selFilter = $('#orderMesaFilter');
+    if (selFilter) {
+      const actual = selFilter.value;
+      selFilter.innerHTML = '<option value="">Todas las mesas</option>' + MESAS.map(m =>
+        `<option value="${m.numero}">Mesa ${m.numero}</option>`
+      ).join('');
+      selFilter.value = actual;
+    }
+  } catch (e) {
+    console.warn('No se pudieron cargar mesas:', e.message);
+  }
+}
+
+async function cargarPedidosAPI() {
+  const u = getUsuarioActual();
+  if (!u || !['MESERO', 'ADMINISTRADOR'].includes(u.rol)) return;
+  const mesa = $('#orderMesaFilter')?.value;
+  const qs = mesa ? `?mesa=${encodeURIComponent(mesa)}` : '';
+  try {
+    PEDIDOS_API = await api(`/api/pedidos${qs}`);
+    renderPedidosAPI();
+  } catch (e) {
+    $('#orderList').innerHTML = `<div class="empty" style="color:var(--bad)">Error: ${e.message}</div>`;
+  }
+}
+
+function renderPedidosAPI() {
+  const u = getUsuarioActual();
+  if (!u || !['MESERO', 'ADMINISTRADOR'].includes(u.rol)) {
+    $('#orderList').innerHTML = '<div class="empty">Usa el Tablero KDS para ver y gestionar comandas.</div>';
+    
+    return;
+  }
+
+  const pend = PEDIDOS_API.filter(p => !['PAGADO', 'CANCELADO'].includes(p.estado)).length;
+  const pag = PEDIDOS_API.filter(p => p.estado === 'PAGADO').length;
+  const can = PEDIDOS_API.filter(p => p.estado === 'CANCELADO').length;
+  const F = [
+    ['all', 'Todo', PEDIDOS_API.length],
+    ['pend', 'Activos', pend],
+    ['paid', 'Pagados', pag],
+    ['cancel', 'Cancelados', can]
+  ];
+  $('#chips').innerHTML = F.map(f =>
+    `<button class="chip ${filter === f[0] ? 'on' : ''}" data-f="${f[0]}">${f[1]}${f[2] ? `<i>${f[2]}</i>` : ''}</button>`
+  ).join('');
+
+  const lista = PEDIDOS_API.filter(p => {
+    if (filter === 'pend') return !['PAGADO', 'CANCELADO'].includes(p.estado);
+    if (filter === 'paid') return p.estado === 'PAGADO';
+    if (filter === 'cancel') return p.estado === 'CANCELADO';
+    return true;
+  });
+
+  $('#orderList').innerHTML = lista.length ? lista.map(p => {
+    const esPagado = p.estado === 'PAGADO';
+    const esCancelado = p.estado === 'CANCELADO';
+    const itemsCount = (p.lineas || []).reduce((s, l) => s + l.cantidad, 0);
+    return `
+    
+      <div class="order ${esPagado ? 'paid' : ''}" style="${esCancelado ? 'opacity:.65;border-left-color:var(--bad)' : ''}">
+        <div class="row">
+          <b>Pedido #${p.id} · Mesa ${p.mesa_numero}</b>
+          <span>${money(p.total)}</span>
+        </div>
+        <div class="row">
+          <span>
+            <span class="tag">${p.confirmado ? 'Confirmado' : 'Borrador'}</span>
+            <span class="tag ${esPagado ? 'g' : 'w'}">${p.estado}</span>
+          </span>
+          <small style="color:var(--mut)">${itemsCount} ítem(s) · ${p.mesero?.nombre || ''}</small>
+        </div>
+        <div class="row" style="margin-top:4px;gap:6px;flex-wrap:wrap">
+          ${!p.confirmado && !esCancelado
+            ? `<button class="btn ok sm" data-confirmar-pedido="${p.id}">Enviar a cocina</button>`
+            : ''
+          }
+          ${p.confirmado && !esPagado && !esCancelado
+            ? `<button class="btn ghost sm" data-enviar-caja="${p.cuenta_id}" data-mesa="${p.mesa_numero}">Enviar a caja</button>`
+            : ''
+          }
+          ${!esPagado && !esCancelado
+            ? `<button class="btn bad sm" data-cancelar-pedido="${p.id}">Cancelar</button>`
+            : ''
+          }
+        </div>
+        <div class="row" style="margin-top:4px;gap:6px;flex-wrap:wrap">
+          ${!p.confirmado && !esCancelado
+            ? `<button class="btn ok sm" data-confirmar-pedido="${p.id}">Enviar a cocina</button>`
+            : ''
+          }
+          ${!esPagado && !esCancelado
+            ? `<button class="btn bad sm" data-cancelar-pedido="${p.id}">Cancelar</button>`
+            : ''
+          }
+        </div>
+      </div>
+    `;
+  }).join('') : '<div class="empty">No hay pedidos para mostrar.</div>';
+}
+
+$('#orderMesaFilter').onchange = () => cargarPedidosAPI();
+
+$('#orderList').onclick = async e => {
+  const btnCaja = e.target.closest('[data-enviar-caja]');
+if (btnCaja) {
+  const cuentaId = +btnCaja.dataset.enviarCaja;
+  const mesaNum = btnCaja.dataset.mesa;
+  try {
+    await api(`/api/cuentas/${cuentaId}/enviar-caja`, { method: 'POST' });
+    alert(`Cuenta de la Mesa ${mesaNum} enviada a caja.`);
+    await Promise.all([cargarPedidosAPI(), cargarMesas(), cargarCuentas()]);
+  } catch (err) {
+    alert(err.message);
+  }
+  return;
+}
+  const btnConf = e.target.closest('[data-confirmar-pedido]');
+  if (btnConf) {
+    try {
+      await api(`/api/pedidos/${+btnConf.dataset.confirmarPedido}/confirmar`, { method: 'POST' });
+      await Promise.all([cargarPedidosAPI(), cargarMesas()]);
+    } catch (err) {
+      alert(err.message);
+    }
+    return;
+  }
+  
+  const btnCanc = e.target.closest('[data-cancelar-pedido]');
+  if (btnCanc) {
+    const id = +btnCanc.dataset.cancelarPedido;
+    const motivo = prompt('Motivo de cancelación (opcional):') ?? '';
+    try {
+      await api(`/api/pedidos/${id}?motivo=${encodeURIComponent(motivo.trim())}`, { method: 'DELETE' });
+      await Promise.all([cargarPedidosAPI(), cargarMesas()]);
+    } catch (err) {
+      alert(err.message);
+    }
+  }
+};
+
+$('#toOrder').onclick = async () => {
+  if (!draft || !draft.lines.length) {
+    alert('Agrega al menos un producto.');
+    return;
+  }
+  const mesaNumero = +($('#draftMesa')?.value || 1);
+  const lineasPayload = draft.lines.map(l => l.libre
+    ? {
+        nombre: l.name,
+        precio_unitario: l.unit,
+        cantidad: l.qty,
+        observacion: l.obs || '',
+        area: l.area || 'PARRILLA'
+      }
+    : {
+        producto_id: l.producto_id,
+        cantidad: l.qty,
+        opcion_ids: l.opcion_ids || [],
+        observacion: l.obs || ''
+      }
+  );
+
+  try {
+    await api('/api/pedidos', {
+      method: 'POST',
+      body: JSON.stringify({ mesa_numero: mesaNumero, lineas: lineasPayload })
+    });
+    draft = null;
+    await Promise.all([cargarPedidosAPI(), cargarMesas()]);
+    go('orders');
+  } catch (err) {
+    alert(err.message);
+  }
+};
+
+async function cargarComandas() {
+  const u = getUsuarioActual();
+  if (!u || !['ADMINISTRADOR', 'ENCARGADO_AREA', 'PATINADOR'].includes(u.rol)) return;
+  const qs = kdsEstadoFiltro ? `?estado=${encodeURIComponent(kdsEstadoFiltro)}` : '';
+  try {
+    COMANDAS_API = await api(`/api/comandas${qs}`);
+    renderComandas();
+  } catch (e) {
+    $('#kdsList').innerHTML = `<div class="empty" style="color:var(--bad)">Error: ${e.message}</div>`;
+  }
+}
+
+function renderComandas() {
+  const u = getUsuarioActual();
+  if (!COMANDAS_API.length) {
+    $('#kdsList').innerHTML = '<div class="empty">No hay comandas en este estado.</div>';
+    return;
+  }
+
+  $('#kdsList').innerHTML = COMANDAS_API.map(c => {
+    let accionHtml = '';
+    if (['ENCARGADO_AREA', 'ADMINISTRADOR'].includes(u?.rol)) {
+      if (c.estado === 'PENDIENTE') {
+        accionHtml = `<button class="btn sm" data-kds-estado="${c.id}" data-next="EN_PREPARACION">Iniciar preparación</button>`;
+      } else if (c.estado === 'EN_PREPARACION') {
+        accionHtml = `<button class="btn ok sm" data-kds-estado="${c.id}" data-next="LISTO">Marcar LISTO</button>`;
+      }
+    }
+    if (['PATINADOR', 'ADMINISTRADOR'].includes(u?.rol) && c.estado === 'LISTO') {
+      accionHtml += `<button class="btn ok sm" data-kds-entregar="${c.id}">Entregar a mesa</button>`;
+    }
+    if (['ENCARGADO_AREA', 'ADMINISTRADOR'].includes(u?.rol)) {
+  accionHtml += `
+    <button class="btn ghost sm" data-kds-imprimir="${c.id}">Reimprimir</button>
+    <button class="btn ghost sm" data-kds-ticket="${c.id}">Ticket</button>
+  `;
+}
+
+    return `
+      <div class="order">
+        <div class="row">
+          <b>Comanda #${String(c.id).padStart(6, '0')} · Mesa ${c.mesa_numero}</b>
+          <span class="tag">${AREAS_LABEL[c.area] || c.area}</span>
+        </div>
+        <div class="row">
+          <span class="tag w">${c.estado}</span>
+          <small style="color:var(--mut)">Pedido #${c.pedido_id}</small>
+        </div>
+        <div style="font-size:13px;display:grid;gap:4px;margin-top:4px">
+          ${(c.lineas || []).map(l => `
+            <div>
+              <b>${l.cantidad}x ${l.nombre}</b>
+              ${l.opciones?.length ? `<small style="color:var(--mut);display:block">Opción: ${l.opciones.join(', ')}</small>` : ''}
+              ${l.observacion ? `<small style="color:var(--warn);display:block">Obs: ${l.observacion}</small>` : ''}
+            </div>
+          `).join('')}
+        </div>
+        ${accionHtml ? `<div class="row" style="margin-top:6px;gap:6px;flex-wrap:wrap">${accionHtml}</div>` : ''}
+      </div>
+    `;
+  }).join('');
+}
+
+$('#kdsEstadoChips').onclick = e => {
+  const b = e.target.closest('[data-kds-estado]');
+  if (!b) return;
+  kdsEstadoFiltro = b.dataset.kdsEstado;
+  $$('#kdsEstadoChips .chip').forEach(x => x.classList.toggle('on', x === b));
+  cargarComandas();
+};
+
+$('#btnRefreshKds').onclick = () => cargarComandas();
+$('#btnOpenKds').onclick = () => { cargarComandas(); go('kds'); };
+
+$('#kdsList').onclick = async e => {
+  const btnImp = e.target.closest('[data-kds-imprimir]');
+if (btnImp) {
+  const id = +btnImp.dataset.kdsImprimir;
+  try {
+    const res = await api(`/api/comandas/${id}/imprimir`, { method: 'POST' });
+    alert(`Comanda #${String(id).padStart(6, '0')} enviada a impresión${res.archivo_impresion ? ` (${res.archivo_impresion})` : ''}.`);
+    await cargarComandas();
+  } catch (err) {
+    alert(err.message);
+  }
+  return;
+}
+
+const btnTkt = e.target.closest('[data-kds-ticket]');
+if (btnTkt) {
+  const id = +btnTkt.dataset.kdsTicket;
+  try {
+    const resp = await fetch(`/api/comandas/${id}/ticket`, {
+      headers: { Authorization: `Bearer ${getToken()}` }
+    });
+    if (!resp.ok) {
+      const errData = await resp.json().catch(() => ({}));
+      throw new Error(errData.detail || 'Ticket no disponible');
+    }
+    const texto = await resp.text();
+    const blob = new Blob([texto], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `comanda-${String(id).padStart(6, '0')}.txt`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+  } catch (err) {
+    alert(err.message);
+  }
+}
+  const btnEst = e.target.closest('[data-kds-estado]');
+  if (btnEst) {
+    try {
+      await api(`/api/comandas/${+btnEst.dataset.kdsEstado}/estado`, {
+        method: 'PUT',
+        body: JSON.stringify({ estado: btnEst.dataset.next })
+      });
+      await cargarComandas();
+    } catch (err) {
+      alert(err.message);
+    }
+    return;
+  }
+  const btnEnt = e.target.closest('[data-kds-entregar]');
+  if (btnEnt) {
+    try {
+      await api(`/api/comandas/${+btnEnt.dataset.kdsEntregar}/entregar`, { method: 'POST' });
+      await cargarComandas();
+    } catch (err) {
+      alert(err.message);
+    }
+  }
+};
+
+async function conectarSSE() {
+  cerrarSSE();
+  const token = getToken();
+  if (!token) return;
+  try {
+    const res = await api('/api/auth/eventos-token', { method: 'POST' });
+    const url = `/api/eventos?token=${encodeURIComponent(res.token)}`;
+    const es = new EventSource(url);
+    sseSource = es;
+
+    es.onopen = () => {
+      const st = $('#sseStatus');
+      if (st) { st.textContent = 'SSE: en vivo'; st.className = 'tag g'; }
+    };
+    es.onerror = () => {
+      const st = $('#sseStatus');
+      if (st) { st.textContent = 'SSE: reconectando...'; st.className = 'tag w'; }
+    };
+
+    const refrescarTodo = () => {
+      cargarMesas();
+      cargarPedidosAPI();
+      cargarComandas();
+    };
+    ['pedido_creado', 'pedido_confirmado', 'pedido_cancelado', 'comanda_creada', 'comanda_estado', 'comanda_entregada', 'cuenta_enviada_caja', 'cuenta_pagada', 'mesa_actualizada']
+      .forEach(ev => es.addEventListener(ev, refrescarTodo));
+  } catch (e) {
+    console.warn('SSE no iniciado:', e.message);
+  }
+}
+
+function cerrarSSE() {
+  if (sseSource) {
+    sseSource.close();
+    sseSource = null;
+  }
+}
+
 /* ---------- Inicialización ---------- */
-renderOrders();
-cargarMenu();
+/* ---------- Login, rol y arranque ---------- */
+async function iniciarSesionApp() {
+  const nav = $('nav');
+  if (nav) nav.style.display = '';
+  aplicarPermisosRol();
+  const u = getUsuarioActual();
+  const vistaInicio = ROL_PERMISOS[u?.rol]?.inicio || 'orders';
+
+  await cargarMesas();
+  if (vistaInicio === 'orders') await cargarPedidosAPI();
+  if (vistaInicio === 'kds') await cargarComandas();
+  if (vistaInicio === 'sales') await cargarCuentas();
+  if (u?.rol === 'ADMINISTRADOR' || u?.rol === 'MESERO') {
+    await cargarMenu();
+  }
+  conectarSSE();
+  go(vistaInicio);
+}
+
+const loginForm = $('#loginForm');
+if (loginForm) {
+  loginForm.onsubmit = async e => {
+    e.preventDefault();
+    const usuario = $('#loginUser').value.trim();
+    const contrasena = $('#loginPass').value;
+    const err = $('#loginErr');
+    if (err) err.style.display = 'none';
+
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ usuario, contrasena })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.detail || 'Credenciales inválidas');
+      }
+
+      localStorage.setItem('pdv_token', data.access_token);
+
+      let perfil = data.usuario || null;
+      if (!perfil) {
+        const meRes = await fetch('/api/auth/me', {
+          headers: { 'Authorization': `Bearer ${data.access_token}` }
+        });
+        if (meRes.ok) perfil = await meRes.json();
+      }
+      if (perfil) {
+        localStorage.setItem('pdv_usuario', JSON.stringify(perfil));
+      }
+
+      $('#loginPass').value = '';
+      await iniciarSesionApp();
+    } catch (ex) {
+      if (err) {
+        err.textContent = ex.message;
+        err.style.display = 'block';
+      }
+    }
+  };
+}
+
+const btnLogout = $('#btnLogout');
+if (btnLogout) {
+  btnLogout.onclick = () => {
+    mostrarLogin();
+  };
+}
+
+(async function initAuth() {
+  const token = localStorage.getItem('pdv_token');
+  if (!token) {
+    mostrarLogin();
+    return;
+  }
+  try {
+    if (!getUsuarioActual()) {
+      const meRes = await fetch('/api/auth/me', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!meRes.ok) throw new Error('Token inválido');
+      localStorage.setItem('pdv_usuario', JSON.stringify(await meRes.json()));
+    }
+    await iniciarSesionApp();
+  } catch {
+    mostrarLogin();
+  }
+})();
+
 setInterval(() => { if ($('#v-orders').classList.contains('on')) renderOrders(); }, 60000);

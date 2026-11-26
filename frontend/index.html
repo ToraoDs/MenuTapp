@@ -8,10 +8,34 @@
 </head>
 <body>
 
+<!-- 0. LOGIN -->
+<section class="view on" id="v-login">
+  <div style="max-width:380px;margin:60px auto;padding:20px;background:var(--card);border:1px solid var(--line);border-radius:12px">
+    <h2 style="margin-top:0">Varcino: Parrilla y Sopas</h2>
+    <p style="color:var(--mut);font-size:14px">Inicia sesión para continuar</p>
+    <form id="loginForm" style="display:grid;gap:12px">
+      <div class="field">
+        <label for="loginUser">Usuario</label>
+        <input id="loginUser" required autocomplete="username" placeholder="Ej. admin, mesero1, cajera">
+      </div>
+      <div class="field">
+        <label for="loginPass">Contraseña</label>
+        <input id="loginPass" type="password" required autocomplete="current-password" placeholder="••••••••">
+      </div>
+      <p id="loginErr" style="color:var(--bad);font-size:13px;margin:0;display:none"></p>
+      <button type="submit" class="btn ok">Entrar</button>
+    </form>
+  </div>
+</section>
+
 <!-- 1. PEDIDOS (vista principal) -->
-<section class="view on" id="v-orders">
+<section class="view" id="v-orders">
   <div class="bar">
     <button class="btn" id="newOrder">+ Nuevo pedido</button>
+    <select id="orderMesaFilter" style="padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--tx);font:inherit">
+      <option value="">Todas las mesas</option>
+    </select>
+    <button class="btn ghost" id="btnOpenKds" style="display:none">🍳 Tablero KDS</button>
     <div class="chips" id="chips"></div>
   </div>
   <div class="list" id="orderList"></div>
@@ -20,6 +44,7 @@
 <!-- 2. MENÚ / CATEGORÍAS (Toma de pedidos) -->
 <section class="view" id="v-menu">
   <div class="top">
+    <select id="draftMesa" aria-label="Mesa" style="padding:11px 10px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--tx);font:inherit"></select>
     <input id="q" type="search" placeholder="Buscar producto" aria-label="Buscar producto">
     <button class="btn ghost" id="free">Producto libre</button>
     <button class="btn" id="openAdminMenu">⚙ Gestionar</button>
@@ -79,11 +104,68 @@
   <div class="list" id="adminContent"></div>
 </section>
 
+<!-- 5. GESTIÓN DE USUARIOS (Administración) -->
+<section class="view" id="v-users">
+  <div class="bar">
+    <h3 style="margin:0;flex:1">Usuarios y Empleados</h3>
+    <button class="btn" id="btnNewUser">+ Nuevo Usuario</button>
+  </div>
+  <div class="list" id="usersList"></div>
+</section>
+
+<!-- 6. TABLERO KDS / COMANDAS -->
+<section class="view" id="v-kds">
+  <div class="bar">
+    <h3 style="margin:0;flex:1">Comandas y Cocina (KDS)</h3>
+    <span id="sseStatus" class="tag">SSE: conectando...</span>
+    <button class="btn ghost" id="btnRefreshKds">↻ Actualizar</button>
+  </div>
+  <div class="bar" style="padding-top:0">
+    <div class="chips" id="kdsEstadoChips">
+      <button class="chip on" data-kds-estado="">Todas</button>
+      <button class="chip" data-kds-estado="PENDIENTE">Pendiente</button>
+      <button class="chip" data-kds-estado="EN_PREPARACION">En preparación</button>
+      <button class="chip" data-kds-estado="LISTO">Listo</button>
+      <button class="chip" data-kds-estado="ENTREGADO">Entregado</button>
+    </div>
+  </div>
+  <div class="list" id="kdsList"></div>
+</section>
+
+<!-- 7. CUENTAS, CAJA E IMPRESIÓN -->
+<section class="view" id="v-sales">
+  <div class="bar">
+    <h3 style="margin:0;flex:1">Cuentas y Caja</h3>
+    <select id="cajaEstadoFilter" style="padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--tx);font:inherit">
+      <option value="ABIERTA">Abiertas</option>
+      <option value="PAGADA">Pagadas</option>
+      <option value="">Todas</option>
+    </select>
+    <button class="btn ghost" id="btnRefreshCuentas">↻ Actualizar</button>
+  </div>
+  <div class="list" id="cuentasList"></div>
+</section>
+
+<!-- 8. DASHBOARD DE REPORTES -->
+<section class="view" id="v-reports">
+  <div class="bar">
+    <h3 style="margin:0;flex:1">Reportes y Cierre</h3>
+    <input type="date" id="repDesde" style="padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--tx);font:inherit">
+    <input type="date" id="repHasta" style="padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--tx);font:inherit">
+    <button class="btn" id="btnRunReportes">Consultar</button>
+  </div>
+  <div class="list" id="reportesResumen"></div>
+</section>
+
 <nav>
   <button data-go="orders" class="on"><b>☰</b>Pedidos PDV</button>
   <button data-go="sales"><b>$</b>Ventas</button>
   <button data-go="menu"><b>🍴</b>Menú</button>
+  <button data-go="users" id="navUsers" style="display:none"><b>👤</b>Usuarios</button>
   <button data-go="more"><b>⋯</b>Más</button>
+  <button type="button" id="btnLogout"><b>🚪</b>Salir</button>
+  <button data-go="kds" id="navKds" style="display:none"><b>🍳</b>KDS</button>
+  <button data-go="reports" id="navReports" style="display:none"><b>📊</b>Reportes</button>
 </nav>
 
 <!-- MODAL: PRODUCTO (personalización para pedido) -->
